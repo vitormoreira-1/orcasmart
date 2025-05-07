@@ -23,22 +23,26 @@ import { cn } from '@/lib/utils';
 import CountUp from 'react-countup';
 
 function History({ userSettings }: { userSettings: UserSettings }) {
-    const [timeframe, setTimeframe] = useState<Timeframe>('month')
-    const [ period, setPeriod ] = useState<Period>({
+    const [timeframe, setTimeframe] = useState<Timeframe>('month');
+    const [period, setPeriod] = useState<Period>({
         month: new Date().getMonth(),
         year: new Date().getFullYear(),
-    })
+    });
 
     const formatter = useMemo(() => {
-        return GetFormatterForCurrency(userSettings.currency)
-    }, [userSettings.currency])
+        return GetFormatterForCurrency(userSettings.currency);
+    }, [userSettings.currency]);
 
-
-    const historyDataQuery = useQuery({
+    const historyDataQuery = useQuery<any>({
         queryKey: ['overview', 'history', timeframe, period],
-        queryFn: () => fetch(`/api/history-data?timeframe=${timeframe}&year=${period.year}&month=${period.month}`)
-        .then(res => res.json())
-    })
+        queryFn: async () => {
+            const res = await fetch(`/api/history-data`);
+            if (!res.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return await res.json();
+        },
+    });
 
     const dataAvailable = historyDataQuery.data && historyDataQuery.data.length > 0;
 

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Period, Timeframe } from '../../../lib/types';
 import prisma from "@/lib/prisma";
 import { getDaysInMonth } from "date-fns";
+import { NextResponse } from "next/server";
 
 const getHistoryDataSchema = z.object({
     timeframe: z.enum(['month', 'year']),
@@ -11,48 +12,53 @@ const getHistoryDataSchema = z.object({
     year: z.coerce.number().min(2000).max(3000),
 })
 
-export async function GET(request: Request){
-    const user = await currentUser();
+export async function GET(request: Request) {
+    debugger
+    // Valida se o usuário está autenticado (exemplo de NextAuth)
+    const user = await currentUser(); // Função fictícia de exemplo
 
     if (!user) {
-        redirect('/sign-in');
+        return NextResponse.redirect('/sign-in');
     }
 
+    // Extraindo os parâmetros da URL
     const { searchParams } = new URL(request.url);
+    const timeframe = searchParams.get('timeframe');
+    const year = searchParams.get('year');
+    const month = searchParams.get('month');
 
-    const timeframe = searchParams.get('timeframe')
-    const year = searchParams.get('year')
-    const month = searchParams.get('month')
-
+    // Validação dos parâmetros usando Zod
     const queryParams = getHistoryDataSchema.safeParse({
+        timeframe,
         year,
         month,
-        timeframe
-    })
+    });
 
-    if(!queryParams.success){
-        return Response.json(queryParams.error.message, {
-            status: 400
-        })
+    if (!queryParams.success) {
+        return NextResponse.json({ error: queryParams.error.message }, { status: 400 });
     }
 
+    const { timeframe: validTimeframe, year: validYear, month: validMonth } = queryParams.data;
 
-    const data = await getHistoryData(user.id, queryParams.data.timeframe, {
-        month: queryParams.data.month,
-        year: queryParams.data.year
-    })
+    // Chama a função para buscar os dados de transação
+    const data = await getTransactionHistory(user.id, validTimeframe, {
+        year: validYear,
+        month: validMonth,
+    });
 
-    return Response.json(data)
+    // Retorna a resposta como JSON
+    return NextResponse.json(data);
 }
 
-export type GetHisotryDataResponseType = Awaited<ReturnType<typeof getHistoryData>>
+export type GetHisotryDataResponseType = Awaited<ReturnType<typeof getTransactionHistory>>
 
-async function getHistoryData(userId: string, timeframe: Timeframe, period: Period){
-    switch(timeframe){
-        case "year":
-            return await getYearHistoryData(userId, period.year)
-        case "month":
-            return await getMonthHistoryData(userId, period.year, period.month)
+async function getTransactionHistory(userId: string, timeframe: 'month' | 'year', period: { year: number, month?: number }) {
+    if (timeframe === 'year') {
+        return await getYearHistoryData(userId, period.year);
+    } else if (timeframe === 'month' && period.month !== undefined) {
+        return await getMonthHistoryData(userId, period.year, period.month);
+    } else {
+        throw new Error('Month must be provided for monthly timeframe');
     }
 }
 
@@ -164,4 +170,3 @@ async function getMonthHistoryData(userId: string, year: number, month: number) 
 
     return history;
 }
-
